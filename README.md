@@ -1,5 +1,5 @@
 # comparador-neumaticos
-!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -383,39 +383,6 @@
     </div>
   </div>
 
-  <!-- MercadoLibre -->
-  <div class="card mt-4">
-    <div class="card-header flex items-center justify-between flex-wrap gap-2">
-      <div class="flex items-center gap-2">
-        <svg width="18" height="18" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#FFE600"/><ellipse cx="16" cy="19" rx="7" ry="5" fill="#3483FA"/><path d="M11 14 Q16 10 21 14" stroke="#3483FA" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
-        <span class="condensed font-bold uppercase tracking-wider text-sm">Buscar también en MercadoLibre</span>
-        <span style="background:rgba(52,131,250,0.15);color:#5BA4FA;border:1px solid rgba(52,131,250,0.3);font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;padding:1px 7px;border-radius:4px;">API oficial · tiempo real</span>
-      </div>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--muted);" onclick="toggleML()">
-        <div style="position:relative;width:38px;height:20px;flex-shrink:0;">
-          <div id="ml-track" style="position:absolute;inset:0;background:var(--border);border-radius:10px;transition:background 0.2s;"></div>
-          <div id="ml-thumb" style="position:absolute;top:3px;left:3px;width:14px;height:14px;background:white;border-radius:50%;transition:transform 0.2s;"></div>
-        </div>
-        <span id="ml-label">Desactivado</span>
-      </label>
-    </div>
-    <div id="ml-body" class="p-4" style="display:none;">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">La API pública de MercadoLibre devuelve precios reales y actualizados al momento.</p>
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
-        <label style="font-size:13px;color:var(--muted);font-weight:600;white-space:nowrap;">Cantidad de resultados a mostrar:</label>
-        <div style="display:flex;gap:6px;">
-          <button onclick="setMLLimit(3)"  id="ml-btn-3"  class="ml-limit-btn active-limit" style="padding:5px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid #3483FA;background:rgba(52,131,250,0.15);color:#5BA4FA;">3</button>
-          <button onclick="setMLLimit(5)"  id="ml-btn-5"  class="ml-limit-btn" style="padding:5px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--surface-3);color:var(--muted);">5</button>
-          <button onclick="setMLLimit(10)" id="ml-btn-10" class="ml-limit-btn" style="padding:5px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--surface-3);color:var(--muted);">10</button>
-        </div>
-        <span id="ml-limit-note" style="font-size:12px;color:var(--muted);font-style:italic;">Mostrará los 3 primeros resultados</span>
-      </div>
-      <div style="background:rgba(52,131,250,0.08);border:1px solid rgba(52,131,250,0.2);border-radius:6px;padding:10px 14px;">
-        <p style="font-size:12px;color:#5BA4FA;">✓ No requiere clave API adicional &nbsp;·&nbsp; ✓ Precios en tiempo real &nbsp;·&nbsp; ✓ Link directo a cada publicación</p>
-      </div>
-    </div>
-  </div>
-
   <!-- Botón principal -->
   <div class="mt-5">
     <button id="btn-comparar" class="btn-primary w-full py-4 rounded-lg text-lg flex items-center justify-center gap-2" onclick="compararPrecios()">
@@ -598,20 +565,43 @@ function extractPricesFromHTML(html, ancho, perfil, rodado, urlUsada) {
   // Regex de precios en formato argentino
   const precioRe = /\$\s*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d{5,7})/g;
 
-  const preciosCercanos = [];
-  const todosPreciosValidos = [];
+  // Palabras clave que indican SIN stock
+  const sinStockRe = /(sin\s*stock|agotado|no\s*disponible|out\s*of\s*stock|sold\s*out|consultar\s*disponibilidad|próximamente|sin\s*existencia)/i;
+  // Palabras clave que indican CON stock
+  const conStockRe  = /(en\s*stock|disponible|agregar\s*al\s*carrito|añadir\s*al\s*carrito|add\s*to\s*cart|comprar\s*ahora|en\s*existencia)/i;
 
-  // Buscar precios en un radio de 300 chars alrededor de cada mención de la medida
+  const preciosConStock    = [];
+  const preciosSinStock    = [];
+  const preciosSinInfo     = [];
+  const todosPreciosValidos = [];
+  const stockSnippets       = [];
+
+  // Buscar precios en un radio alrededor de cada mención de la medida
   let matchMedida;
   while ((matchMedida = medidaRe.exec(text)) !== null) {
-    const start = Math.max(0, matchMedida.index - 200);
-    const end   = Math.min(text.length, matchMedida.index + 300);
+    const start = Math.max(0, matchMedida.index - 150);
+    const end   = Math.min(text.length, matchMedida.index + 400);
     const fragment = text.slice(start, end);
+
+    const tieneSinStock = sinStockRe.test(fragment);
+    const tieneConStock = conStockRe.test(fragment);
+
+    if (tieneSinStock || tieneConStock) {
+      stockSnippets.push(fragment.slice(0, 120).trim());
+    }
+
     let pm;
     const reLocal = new RegExp(precioRe.source, 'g');
     while ((pm = reLocal.exec(fragment)) !== null) {
       const n = parsePrecioAR(pm[0]);
-      if (n) preciosCercanos.push(n);
+      if (!n) continue;
+      if (tieneSinStock && !tieneConStock) {
+        preciosSinStock.push(n);
+      } else if (tieneConStock) {
+        preciosConStock.push(n);
+      } else {
+        preciosSinInfo.push(n);
+      }
     }
   }
 
@@ -623,13 +613,31 @@ function extractPricesFromHTML(html, ancho, perfil, rodado, urlUsada) {
     if (n) todosPreciosValidos.push(n);
   }
 
+  // Prioridad: precios CON stock confirmado > precios sin info de stock > precios SIN stock (último recurso)
+  let preciosCercanos, fuenteStock;
+  if (preciosConStock.length > 0) {
+    preciosCercanos = preciosConStock;
+    fuenteStock = 'disponible';
+  } else if (preciosSinInfo.length > 0) {
+    preciosCercanos = preciosSinInfo;
+    fuenteStock = 'desconocido';
+  } else if (preciosSinStock.length > 0) {
+    preciosCercanos = preciosSinStock;
+    fuenteStock = 'no disponible';
+  } else {
+    preciosCercanos = [];
+    fuenteStock = 'desconocido';
+  }
+
   const lista = preciosCercanos.length > 0 ? preciosCercanos : todosPreciosValidos;
   const unicos = [...new Set(lista)].sort((a,b) => a-b);
 
   return {
     precioMinimo: unicos[0] || null,
-    todosPreciosValidos: unicos.slice(0, 15),
-    preciosCercanos: [...new Set(preciosCercanos)].sort((a,b)=>a-b),
+    disponibilidadDetectada: fuenteStock,
+    todosPreciosValidos: [...new Set(todosPreciosValidos)].sort((a,b)=>a-b).slice(0, 15),
+    preciosCercanos: unicos,
+    stockSnippets,
     urlUsada,
     fuente: 'scraping'
   };
@@ -671,22 +679,27 @@ async function fetchPriceFromClaude(apiKey, medida, siteUrl, scrapedData) {
       ? scrapedData.preciosCercanos.map(formatPrice).join(', ')
       : 'ninguno';
     const todosPreciosPag = scrapedData.todosPreciosValidos?.slice(0,10).map(formatPrice).join(', ') || 'ninguno';
+    const stockInfo = scrapedData.stockSnippets?.length > 0
+      ? scrapedData.stockSnippets.slice(0,5).join(' | ')
+      : 'sin información de stock detectada';
 
     const prompt = `Analizá esta información de precios obtenida del sitio ${hostname} para neumáticos con medida ${medida}.
 
 PRECIOS ENCONTRADOS CERCA DE LA MEDIDA EN LA PÁGINA: ${preciosCercanos}
 TODOS LOS PRECIOS EN LA PÁGINA: ${todosPreciosPag}
+FRAGMENTOS DE TEXTO SOBRE STOCK/DISPONIBILIDAD CERCA DE LA MEDIDA: ${stockInfo}
 URL ANALIZADA: ${scrapedData.urlUsada}
 
 Tu tarea:
-- Determiná cuál es el precio MÁS BAJO real para la medida ${medida} en este sitio
-- Los precios cerca de la medida son más confiables
-- Descartá precios que claramente no correspondan a neumáticos (ej: precios de servicios, envío, etc.)
-- Si los precios parecen válidos para un neumático ${medida} en Argentina (entre $30.000 y $500.000), el más bajo es el correcto
+- Determiná cuál es el precio MÁS BAJO real para la medida ${medida} EN STOCK en este sitio
+- Si los fragmentos de stock mencionan "sin stock", "agotado", "no disponible" cerca de un precio, ESE precio no cuenta como disponible — preferí otro precio si lo hay
+- Si TODOS los precios encontrados parecen sin stock, usá el más bajo igual pero marcá disponibilidad "no disponible" y confianza "media"
+- Descartá precios que claramente no correspondan a neumáticos (servicios, envío, etc.)
+- Precio válido: entre $30.000 y $500.000 para esta medida
 - Nombre del sitio: deducilo del hostname "${hostname}"
 
 Respondé SOLO con este JSON exacto, sin texto extra ni markdown:
-{"sitio":"nombre comercial del sitio","url":"${siteUrl}","precio":NUMERO_ENTERO,"precio_formateado":"$XX.XXX","disponibilidad":"disponible","observaciones":"breve descripción max 60 chars","confianza":"alta","status":"encontrado"}
+{"sitio":"nombre comercial del sitio","url":"${siteUrl}","precio":NUMERO_ENTERO,"precio_formateado":"$XX.XXX","disponibilidad":"disponible|no disponible|consultar","observaciones":"breve descripción max 60 chars","confianza":"alta|media","status":"encontrado"}
 
 Si ningún precio es válido para un neumático, devolvé: {"sitio":"${hostname}","url":"${siteUrl}","precio":null,"precio_formateado":null,"disponibilidad":"desconocido","observaciones":"Precios no corresponden a neumáticos","confianza":"baja","status":"no_encontrado"}`;
 
@@ -729,20 +742,27 @@ Si ningún precio es válido para un neumático, devolvé: {"sitio":"${hostname}
 
   // CASO 2: Sin scraping → Claude busca con web_search (fallback)
   const variantes = m ? `${m[1]}/${m[2]} R${m[3]} | ${m[1]}/${m[2]}R${m[3]}` : medida;
-  const prompt = `Buscá el precio MÁS BAJO de neumáticos medida ${medida} en el sitio ${siteUrl}.
+  const prompt = `Sos un investigador de precios meticuloso. Tu tarea es encontrar el precio MÁS BAJO real y DISPONIBLE de neumáticos medida ${medida} en el sitio ${siteUrl}.
 
 Variantes del formato: ${variantes}
 
-Pasos:
+PASOS OBLIGATORIOS:
 1. Buscá: site:${hostname} neumatico ${medida}
-2. Si no hay: neumatico ${medida} ${hostname} precio Argentina
-3. Listá TODOS los precios que encontrés para esa medida
-4. Devolvé el precio MÁS BAJO (no el primero)
+2. Si no hay resultados: neumatico ${medida} ${hostname} precio Argentina
+3. Revisá CADA resultado encontrado y anotá: precio + si está en stock/disponible
+4. Si el sitio tiene varios modelos/marcas para esa medida, anotá el precio de TODOS
+5. Elegí el precio MÁS BAJO ENTRE LOS QUE ESTÁN EN STOCK
 
-Reglas: Solo pesos ARS ($10.000-$2.000.000). Sin precios inventados. Sin dólares.
+REGLAS CRÍTICAS (muy importantes):
+- IGNORÁ productos marcados como "sin stock", "agotado", "no disponible", "consultar disponibilidad" — esos NO cuentan, aunque tengan precio
+- Si TODOS los productos para esa medida están sin stock, indicá "disponibilidad": "no disponible" y usá el precio más bajo de los que viste (con confianza "media")
+- NO devuelvas el primer precio que veas — comparalos todos y quedate con el menor
+- Precio en pesos argentinos (ARS), entre $10.000 y $2.000.000
+- NO inventes ni estimes precios que no viste explícitamente
+- Si no encontrás nada concreto para esa medida exacta: status "no_encontrado"
 
-Respondé SOLO con JSON, sin markdown:
-{"sitio":"nombre","url":"${siteUrl}","precio":NUMERO_o_null,"precio_formateado":"$XX.XXX o null","disponibilidad":"disponible|consultar|no disponible|desconocido","observaciones":"max 60 chars","confianza":"alta|media|baja","status":"encontrado|no_encontrado|error"}`;
+Respondé SOLO con JSON, sin markdown ni texto extra:
+{"sitio":"nombre comercial","url":"${siteUrl}","precio":NUMERO_o_null,"precio_formateado":"$XX.XXX o null","disponibilidad":"disponible|consultar|no disponible|desconocido","observaciones":"qué modelo y stock, max 70 chars","confianza":"alta|media|baja","status":"encontrado|no_encontrado|error"}`;
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -776,7 +796,7 @@ Respondé SOLO con JSON, sin markdown:
 // ──────────────────────────────────────────────
 // Renderizar estado de carga por sitio
 // ──────────────────────────────────────────────
-function renderLoadingCards(sites, producto, conML) {
+function renderLoadingCards(sites, producto) {
   const container = document.getElementById('resultados');
   container.style.display = 'block';
 
@@ -801,18 +821,6 @@ function renderLoadingCards(sites, producto, conML) {
         </div>
       </div>`;
   });
-  if (conML) {
-    html += `
-      <div class="result-card" id="card-ml" style="background:var(--surface-2); border-color:rgba(52,131,250,0.3);">
-        <div class="p-4">
-          <p style="font-size:12px; color:#5BA4FA; margin-bottom:10px;">mercadolibre.com.ar</p>
-          <div class="flex items-center gap-2">
-            <div class="spinner" style="border-top-color:#5BA4FA;"></div>
-            <span style="font-size:14px; color:var(--muted);">Consultando API de ML...</span>
-          </div>
-        </div>
-      </div>`;
-  }
   html += `</div></div></div>`;
   container.innerHTML = html;
 }
@@ -991,81 +999,61 @@ async function compararPrecios() {
     errDiv.textContent = '⚠ La medida no tiene el formato correcto. Debe ser algo como: 185/60 R15';
     errDiv.style.display = 'block'; return;
   }
-  if (sites.length === 0 && !mlActivo) {
-    errDiv.textContent = '⚠ Ingresá al menos una URL de sitio web o activá MercadoLibre.';
+  if (sites.length === 0) {
+    errDiv.textContent = '⚠ Ingresá al menos una URL de sitio web.';
     errDiv.style.display = 'block'; return;
   }
 
   const btn = document.getElementById('btn-comparar');
   btn.disabled = true;
-  const total = sites.length + (mlActivo ? 1 : 0);
-  btn.innerHTML = `<div class="spinner"></div> Analizando ${total} fuente${total > 1 ? 's' : ''}...`;
+  btn.innerHTML = `<div class="spinner"></div> Analizando ${sites.length} sitio${sites.length > 1 ? 's' : ''}...`;
 
   // Mostrar skeletons de sitios
-  renderLoadingCards(sites, producto, mlActivo);
+  renderLoadingCards(sites, producto);
 
   // Consultar sitios: scraping directo primero, Claude con esos datos como contexto
-  const [siteResults, mlResults] = await Promise.all([
-    Promise.all(sites.map(async (url, i) => {
-      try {
-        // 1. Scraping directo del HTML del sitio
-        const scraped = await scrapeSite(producto, url);
-        // 2. Claude interpreta los precios encontrados (o busca si no hay scraping)
-        const res = await fetchPriceFromClaude(apiKey, producto, url, scraped);
-        // Fallback: si Claude no devolvió precio pero scraping sí encontró algo
-        if ((!res.precio || res.status !== 'encontrado') && scraped?.precioMinimo) {
-          let siteName = url;
-          try { siteName = new URL(url.startsWith('http')?url:'https://'+url).hostname.replace('www.',''); } catch {}
-          return {
-            sitio: res.sitio || siteName, url,
-            precio: scraped.precioMinimo,
-            precio_formateado: formatPrice(scraped.precioMinimo),
-            disponibilidad: 'disponible',
-            observaciones: 'Precio por scraping directo',
-            confianza: 'media', status: 'encontrado', _index: i
-          };
-        }
-        return { ...res, url, _index: i };
-      } catch (err) {
+  const siteResults = await Promise.all(sites.map(async (url, i) => {
+    try {
+      // 1. Scraping directo del HTML del sitio
+      const scraped = await scrapeSite(producto, url);
+      // 2. Claude interpreta los precios encontrados (o busca si no hay scraping)
+      const res = await fetchPriceFromClaude(apiKey, producto, url, scraped);
+      // Fallback: si Claude no devolvió precio pero scraping sí encontró algo
+      if ((!res.precio || res.status !== 'encontrado') && scraped?.precioMinimo) {
         let siteName = url;
         try { siteName = new URL(url.startsWith('http')?url:'https://'+url).hostname.replace('www.',''); } catch {}
-        return { sitio: siteName, url, precio: null, status: 'error',
-          observaciones: err.message?.substring(0,100) || 'Error', confianza: 'baja', _index: i };
+        return {
+          sitio: res.sitio || siteName, url,
+          precio: scraped.precioMinimo,
+          precio_formateado: formatPrice(scraped.precioMinimo),
+          disponibilidad: 'disponible',
+          observaciones: 'Precio por scraping directo',
+          confianza: 'media', status: 'encontrado', _index: i
+        };
       }
-    })),
-    mlActivo ? fetchMercadoLibre(producto) : Promise.resolve([])
-  ]);
+      return { ...res, url, _index: i };
+    } catch (err) {
+      let siteName = url;
+      try { siteName = new URL(url.startsWith('http')?url:'https://'+url).hostname.replace('www.',''); } catch {}
+      return { sitio: siteName, url, precio: null, status: 'error',
+        observaciones: err.message?.substring(0,100) || 'Error', confianza: 'baja', _index: i };
+    }
+  }));
 
-  // Calcular precio mínimo global (sitios + ML) — solo números válidos
+  // Calcular precio mínimo global — solo números válidos
   const sitePrices = siteResults
     .filter(r => r.status === 'encontrado' && r.precio)
     .map(r => typeof r.precio === 'number' ? r.precio : extractNumber(r.precio))
     .filter(Boolean);
-  const mlPrices = mlResults
-    .filter(r => r.status === 'encontrado' && typeof r.precio === 'number')
-    .map(r => r.precio);
-  const allPrices = [...sitePrices, ...mlPrices];
-  const minPrice  = allPrices.length > 0 ? Math.min(...allPrices) : null;
+  const minPrice = sitePrices.length > 0 ? Math.min(...sitePrices) : null;
 
   // Actualizar cards de sitios
   siteResults.forEach((r, i) => updateCard(i, r, i, minPrice));
-
-  // Actualizar card de ML si estaba cargando
-  if (mlActivo) {
-    const mlCard = document.getElementById('card-ml');
-    if (mlCard) mlCard.remove();
-  }
 
   // Tabla resumen de sitios
   const summaryHtml = renderSummaryTable(siteResults, producto);
   if (summaryHtml) {
     document.getElementById('resultados').insertAdjacentHTML('beforeend', summaryHtml);
-  }
-
-  // Sección MercadoLibre
-  if (mlActivo && mlResults.length > 0) {
-    const mlHtml = renderMLSection(mlResults, minPrice);
-    document.getElementById('resultados').insertAdjacentHTML('beforeend', mlHtml);
   }
 
   btn.disabled = false;
@@ -1081,7 +1069,6 @@ async function compararPrecios() {
     _num: r.status === 'encontrado' ? (typeof r.precio === 'number' ? r.precio : extractNumber(r.precio)) : null
   }));
   window._lastSiteResults = siteWithNum;
-  window._lastMLResults   = mlResults;
 
   // Mostrar botón PDF
   document.getElementById('btn-pdf-wrap').style.display = 'block';
@@ -1164,7 +1151,6 @@ async function exportarPDF() {
     // ── Recolectar datos mostrados en pantalla ──
     // Leer de los datos guardados en window (los guardamos al terminar la búsqueda)
     const siteData = window._lastSiteResults || [];
-    const mlData   = window._lastMLResults   || [];
 
     // ── Sección: Sitios web ──
     if (siteData.length > 0) {
@@ -1314,75 +1300,6 @@ async function exportarPDF() {
       y += 18;
     }
 
-    // ── MercadoLibre ──
-    const mlFound = mlData.filter(r=>r.status==='encontrado' && r.precio);
-    if (mlFound.length > 0) {
-      y += 4; checkY(10 + mlFound.length * 22);
-
-      setFC(C.bg); setDC(C.border); pdf.setLineWidth(0.2);
-      pdf.rect(ml, y, usable, 7, 'FD');
-      pdf.setFontSize(8); pdf.setFont('helvetica','bold'); setC(C.blue);
-      txt(`MERCADOLIBRE  (${mlFound.length} publicación${mlFound.length!==1?'es':''} encontrada${mlFound.length!==1?'s':''})`, ml+2, y+5);
-      y += 10;
-
-      const colW2 = (usable - (Math.min(mlFound.length,3)-1)*4) / Math.min(mlFound.length,3);
-      const allP = [...(validSites.map(r=>r._num)||[]), ...mlFound.map(r=>r.precio)].filter(Boolean);
-      const globalMin = allP.length ? Math.min(...allP) : null;
-
-      const rows2 = [];
-      for (let i=0; i<mlFound.length; i+=3) rows2.push(mlFound.slice(i,i+3));
-
-      for (const row of rows2) {
-        checkY(36);
-        let x = ml;
-        for (const item of row) {
-          const isBest = globalMin && item.precio === globalMin;
-          setFC(C.bgCard); setDC(isBest ? C.green : C.blue);
-          pdf.setLineWidth(isBest ? 0.5 : 0.2);
-          pdf.roundedRect(x, y, colW2, 32, 2, 2, 'FD');
-
-          if (isBest) {
-            setFC('#e8f5e9');
-            pdf.roundedRect(x, y, colW2, 5.5, 2, 2, 'F');
-            pdf.setFontSize(6); pdf.setFont('helvetica','bold'); setC(C.green);
-            txt('★ PRECIO MÁS BAJO GLOBAL', x+2, y+3.8);
-          }
-          const ty = isBest ? y+7 : y+4;
-
-          // Título publicación
-          const titulo = (item.titulo||'').slice(0,36);
-          pdf.setFontSize(6.5); pdf.setFont('helvetica','normal'); setC(C.dark);
-          const tLines = pdf.splitTextToSize(titulo, colW2-4);
-          pdf.text(tLines.slice(0,2), x+2, ty);
-
-          // Precio
-          pdf.setFontSize(12); pdf.setFont('helvetica','bold'); setC(isBest?C.green:C.blue);
-          txt(formatPrice(item.precio), x+2, ty+11);
-
-          // Tags
-          pdf.setFontSize(6); pdf.setFont('helvetica','normal');
-          let tagX = x+2;
-          setC(C.blue); txt(item.condicion||'', tagX, ty+16);
-          if (item.envio_gratis) { tagX += 14; setC(C.green); txt('Envío gratis', tagX, ty+16); }
-
-          // Vendedor
-          setC(C.muted); txt((item.vendedor||'').slice(0,22), x+2, ty+21);
-
-          // Link
-          setC(C.blue); txt('Ver en MercadoLibre →', x+2, ty+26);
-
-          x += colW2+4;
-        }
-        y += 36;
-      }
-    } else if (mlActivo) {
-      y += 4; checkY(12);
-      setFC(C.bg); setDC(C.border); pdf.roundedRect(ml,y,usable,10,1.5,1.5,'FD');
-      pdf.setFontSize(8); setC(C.muted);
-      txt('MERCADOLIBRE: Sin resultados encontrados para esta medida', ml+4, y+6.5);
-      y += 14;
-    }
-
     // ── Footer en todas las páginas ──
     const totalPages = pdf.internal.getNumberOfPages();
     for (let i=1; i<=totalPages; i++) {
@@ -1404,184 +1321,6 @@ async function exportarPDF() {
 
   btn.innerHTML = originalHTML;
   btn.disabled = false;
-}
-// ──────────────────────────────────────────────
-// Toggle MercadoLibre switch
-// ──────────────────────────────────────────────
-let mlActivo = false;
-let mlLimit  = 3;
-
-function setMLLimit(n) {
-  mlLimit = n;
-  [3, 5, 10].forEach(v => {
-    const btn = document.getElementById(`ml-btn-${v}`);
-    if (!btn) return;
-    if (v === n) {
-      btn.style.border      = '1px solid #3483FA';
-      btn.style.background  = 'rgba(52,131,250,0.15)';
-      btn.style.color       = '#5BA4FA';
-    } else {
-      btn.style.border      = '1px solid var(--border)';
-      btn.style.background  = 'var(--surface-3)';
-      btn.style.color       = 'var(--muted)';
-    }
-  });
-  const note = document.getElementById('ml-limit-note');
-  if (note) note.textContent = `Mostrará los ${n} primeros resultados`;
-}
-
-function toggleML() {
-  mlActivo = !mlActivo;
-  document.getElementById('ml-track').style.background  = mlActivo ? '#3483FA' : 'var(--border)';
-  document.getElementById('ml-thumb').style.transform   = mlActivo ? 'translateX(18px)' : 'translateX(0)';
-  document.getElementById('ml-label').textContent       = mlActivo ? 'Activado' : 'Desactivado';
-  document.getElementById('ml-label').style.color       = mlActivo ? '#5BA4FA' : 'var(--muted)';
-  document.getElementById('ml-body').style.display      = mlActivo ? 'block' : 'none';
-}
-
-// ──────────────────────────────────────────────
-// API oficial MercadoLibre
-// ──────────────────────────────────────────────
-async function fetchMercadoLibre(medida) {
-  const match = medida.trim().match(/(\d{3})\s*\/\s*(\d{2})\s*R\s*(\d{2})/i);
-  if (!match) return [{ sitio:'MercadoLibre', fuente:'ml', status:'error', precio:null, observaciones:'Medida inválida' }];
-  const ancho = match[1], perfil = match[2], rodado = match[3];
-  const lim = Math.max(mlLimit * 3, 15);
-
-  // Construir URL de ML con / correctamente encodada como %2F
-  function buildMLUrl(termino) {
-    // Reemplazar manualmente / → %2F, espacio → %20
-    const q = termino
-      .replace(/&/g,'%26').replace(/\//g,'%2F')
-      .replace(/\?/g,'%3F').replace(/ /g,'%20');
-    return `https://api.mercadolibre.com/sites/MLA/search?q=${q}&limit=${lim}`;
-  }
-
-  // Intentar obtener JSON de ML a través de múltiples proxies CORS
-  async function tryFetch(mlApiUrl) {
-    const proxies = [
-      // corsproxy.io: responde directamente con el JSON de ML
-      `https://corsproxy.io/?url=${encodeURIComponent(mlApiUrl)}`,
-      // allorigins: envuelve la respuesta en {contents: "string_json"}
-      `https://api.allorigins.win/get?url=${encodeURIComponent(mlApiUrl)}`,
-      // thingproxy: responde directamente
-      `https://thingproxy.freeboard.io/fetch/${mlApiUrl}`,
-    ];
-
-    for (const proxyUrl of proxies) {
-      try {
-        const resp = await fetch(proxyUrl, {
-          headers: { Accept: 'application/json' },
-          signal: AbortSignal.timeout(9000)
-        });
-        if (!resp.ok) { console.warn('ML proxy status:', resp.status, proxyUrl); continue; }
-        const raw = await resp.json();
-
-        // Desempaquetar según el proxy
-        let data = raw;
-        if (raw?.contents) {
-          // allorigins envuelve en {contents: "...json..."}
-          try { data = JSON.parse(raw.contents); } catch { continue; }
-        }
-        if (data?.results?.length > 0) return data.results;
-      } catch(e) { console.warn('ML proxy error:', e.message); }
-    }
-    return [];
-  }
-
-  // Términos de búsqueda en orden de efectividad
-  const terminos = [
-    `neumatico ${ancho}/${perfil}R${rodado}`,
-    `${ancho}/${perfil}R${rodado}`,
-    `neumatico ${ancho}/${perfil} R${rodado}`,
-  ];
-
-  let items = [];
-  for (const t of terminos) {
-    if (items.length > 0) break;
-    items = await tryFetch(buildMLUrl(t));
-  }
-
-  if (items.length === 0)
-    return [{ sitio:'MercadoLibre', fuente:'ml', status:'no_encontrado', precio:null,
-      observaciones:`Sin resultados en ML para ${medida}. Verificá tu conexión.` }];
-
-  // Filtrar: ARS, precio válido, título contiene al menos ancho y rodado
-  const precioOK = i => i.currency_id==='ARS' && i.price>=10000 && i.price<=2000000;
-  const tituloOK = i => {
-    const t = i.title.toUpperCase().replace(/[\s\-\.]/g,'');
-    return t.includes(ancho) && t.includes('R'+rodado);
-  };
-  let lista = items.filter(i => precioOK(i) && tituloOK(i));
-  // Fallback más permisivo si el filtro de título es muy estricto
-  if (lista.length === 0) lista = items.filter(precioOK);
-  lista = lista.slice(0, mlLimit);
-
-  if (lista.length === 0)
-    return [{ sitio:'MercadoLibre', fuente:'ml', status:'no_encontrado', precio:null,
-      observaciones:'Sin resultados válidos en ARS para esta medida' }];
-
-  return lista.map(item => ({
-    sitio: 'MercadoLibre', fuente: 'ml',
-    titulo: item.title,
-    url: item.permalink,
-    precio: Math.round(item.price),
-    precio_formateado: formatPrice(Math.round(item.price)),
-    moneda: 'ARS',
-    disponibilidad: (item.available_quantity||0)>0 ? 'disponible' : 'sin stock',
-    vendedor: item.seller?.nickname || '',
-    envio_gratis: item.shipping?.free_shipping || false,
-    condicion: item.condition==='new' ? 'nuevo' : 'usado',
-    status: 'encontrado', confianza: 'alta',
-    observaciones: `${item.condition==='new'?'Nuevo':'Usado'}${item.shipping?.free_shipping?' · Envío gratis':''} · Stock: ${item.available_quantity??'?'}`
-  }));
-}
-// ──────────────────────────────────────────────
-// Renderizar sección MercadoLibre
-// ──────────────────────────────────────────────
-function renderMLSection(mlResults, minPriceGlobal) {
-  const found = mlResults.filter(r => r.precio && r.status === 'encontrado');
-  if (mlResults.length === 0 || (mlResults.length === 1 && mlResults[0].status === 'error')) {
-    return `<div class="card mt-4 fade-in p-4"><p style="color:var(--muted);font-size:14px;">⚠ No se encontraron resultados en MercadoLibre para este producto.</p></div>`;
-  }
-
-  let cards = '';
-  found.forEach(item => {
-    const p      = item.precio;
-    const isBest = minPriceGlobal && p === minPriceGlobal;
-    const pColor = isBest ? 'var(--green)' : p < (minPriceGlobal || p) * 1.05 ? 'var(--amber)' : '#F07060';
-    cards += `
-      <div style="background:var(--surface-3);border:1px solid ${isBest ? 'var(--green)' : 'var(--border)'};border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:6px;">
-        ${isBest ? `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#5DD990;margin-bottom:2px;">★ Precio más bajo global</div>` : ''}
-        <p style="font-size:13px;font-weight:600;color:var(--text);margin:0;line-height:1.3;">${escHtml(item.titulo || '')}</p>
-        <p style="font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:800;color:${pColor};margin:0;line-height:1;">${item.precio_formateado || formatPrice(p)}</p>
-        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:2px;">
-          <span style="font-size:11px;padding:2px 7px;border-radius:4px;background:rgba(52,131,250,0.12);color:#5BA4FA;font-weight:600;">${escHtml(item.condicion)}</span>
-          ${item.envio_gratis ? `<span style="font-size:11px;padding:2px 7px;border-radius:4px;background:rgba(46,204,113,0.12);color:#5DD990;font-weight:600;">Envío gratis</span>` : ''}
-          <span style="font-size:11px;padding:2px 7px;border-radius:4px;background:var(--surface-2);color:var(--muted);">${escHtml(item.disponibilidad)}</span>
-        </div>
-        ${item.vendedor ? `<p style="font-size:11px;color:var(--muted);margin:0;">Vendedor: ${escHtml(item.vendedor)}</p>` : ''}
-        <a href="${escHtml(item.url)}" target="_blank" style="margin-top:4px;display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#5BA4FA;text-decoration:none;font-weight:600;">
-          Ver en MercadoLibre
-          <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-        </a>
-      </div>`;
-  });
-
-  return `
-    <div class="card mt-5 fade-in">
-      <div class="card-header flex items-center gap-2">
-        <svg width="18" height="18" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#FFE600"/><ellipse cx="16" cy="19" rx="7" ry="5" fill="#3483FA"/><path d="M11 14 Q16 10 21 14" stroke="#3483FA" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
-        <h3 class="condensed font-bold uppercase tracking-wider" style="font-size:16px;">Resultados en MercadoLibre</h3>
-        <span style="font-size:11px;color:var(--muted);">${found.length} publicación${found.length !== 1 ? 'es' : ''} encontrada${found.length !== 1 ? 's' : ''}</span>
-      </div>
-      <div class="p-4 grid gap-3" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));">
-        ${cards}
-      </div>
-      <div class="p-3" style="border-top:1px solid var(--border);">
-        <p style="font-size:11px;color:var(--muted);text-align:center;">Datos obtenidos en tiempo real desde la API oficial de MercadoLibre Argentina · Categoría: Neumáticos y Llantas</p>
-      </div>
-    </div>`;
 }
 
 // ──────────────────────────────────────────────
