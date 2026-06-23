@@ -1,4 +1,3 @@
-# comparador-neumaticos
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -519,29 +518,32 @@ async function scrapeSite(medida, siteUrl) {
     `${base}/tienda?s=${encodeURIComponent(term1)}`,
   ];
 
-  // Proxies en orden de preferencia
+  // Proxies vigentes (2026), cada uno con su forma de devolver el contenido
   const proxies = [
-    url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-    url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-    url => `https://thingproxy.freeboard.io/fetch/${url}`,
+    { build: url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, type: 'text' },
+    { build: url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, type: 'text' },
+    { build: url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`, type: 'text' },
+    { build: url => `https://cors.x2u.in/${url}`, type: 'text' },
   ];
 
   for (const searchUrl of searchURLs) {
-    for (const makeProxy of proxies) {
+    for (const proxy of proxies) {
       try {
-        const proxyUrl = makeProxy(searchUrl);
-        const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(7000) });
-        if (!resp.ok) continue;
-        const raw = await resp.json().catch(() => null);
-        // allorigins devuelve {contents: "..."}, corsproxy devuelve texto directo
-        const html = raw?.contents || (typeof raw === 'string' ? raw : null);
-        if (!html || html.length < 500) continue;
+        const proxyUrl = proxy.build(searchUrl);
+        const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+        if (!resp.ok) { console.warn(`Scrape: proxy status ${resp.status} →`, proxyUrl.slice(0,60)); continue; }
+        const html = await resp.text();
+        if (!html || html.length < 300) { console.warn('Scrape: HTML muy corto o vacío desde', proxyUrl.slice(0,60)); continue; }
 
         const result = extractPricesFromHTML(html, ancho, perfil, rodado, searchUrl);
-        if (result.precioMinimo) return result;
-      } catch { continue; }
+        if (result.precioMinimo) {
+          console.info(`✓ Scraping OK para ${siteUrl} via ${proxyUrl.slice(0,40)} — precio: ${result.precioMinimo}`);
+          return result;
+        }
+      } catch(e) { console.warn('Scrape proxy error:', e.message, proxy.build(searchUrl).slice(0,60)); continue; }
     }
   }
+  console.warn(`✗ Scraping sin éxito para ${siteUrl} — se usará Claude con web_search como fallback`);
   return null;
 }
 
@@ -1371,3 +1373,4 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
+
